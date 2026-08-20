@@ -29,7 +29,7 @@ transcodeSession.startCleanupInterval();
  * Body: { url: string, seekOffset?: number }
  */
 router.post('/session', async (req, res) => {
-    const { url, seekOffset, videoMode, videoCodec, audioCodec, audioChannels } = req.body;
+    const { url, seekOffset, videoMode, videoCodec, audioCodec, audioChannels, audioDelayMs } = req.body;
 
     if (!url) {
         return res.status(400).json({ error: 'URL is required' });
@@ -55,7 +55,8 @@ router.post('/session', async (req, res) => {
             videoMode: videoMode, // 'copy' or 'encode'
             videoCodec: videoCodec, // 'h264', 'hevc', etc.
             audioCodec: audioCodec, // 'aac', 'ac3', etc.
-            audioChannels: audioChannels // number of channels (2=stereo)
+            audioChannels: audioChannels, // number of channels (2=stereo)
+            audioDelayMs: audioDelayMs || settings.audioDelayMs || 0
         });
 
         await session.start();
@@ -170,10 +171,19 @@ router.get('/', async (req, res) => {
     // Get User-Agent from settings
     const settings = await db.settings.get();
     const userAgent = db.getUserAgent(settings);
+    const audioDelayMs = Math.max(0, parseInt(req.query.audioDelayMs, 10) || settings.audioDelayMs || 0);
+    const seekSec = Math.max(0, parseFloat(req.query.ss || req.query.seek || '0') || 0);
+    const inputUrl = transcodeSession.toFfmpegInputUrl(url);
+    const audioFilters = ['aresample=async=1:min_hard_comp=0.100000:first_pts=0'];
+    if (audioDelayMs > 0) {
+        audioFilters.push(`adelay=${audioDelayMs}:all=1`);
+    }
 
     console.log(`[Transcode] Starting transcoding for: ${url}`);
     console.log(`[Transcode] Using User-Agent: ${settings.userAgentPreset}`);
     console.log(`[Transcode] Using binary: ${ffmpegPath}`);
+    if (audioDelayMs > 0) console.log(`[Transcode] Audio delay: ${audioDelayMs} ms`);
+    if (seekSec > 0) console.log(`[Transcode] Input seek: ${seekSec}s`);
 
     // FFmpeg arguments for transcoding
     // Optimized for VOD content with incompatible audio (Dolby/AC3/EAC3)
@@ -195,9 +205,17 @@ router.get('/', async (req, res) => {
         '-reconnect', '1',
         '-reconnect_streamed', '1',
         '-reconnect_delay_max', '3',
+    ];
+
+    if (seekSec > 0) {
+        args.push('-ss', String(seekSec));
+    } else {
         // Prevent Range/HEAD requests that some providers reject with 405
-        '-seekable', '0',
-        '-i', url,
+        args.push('-seekable', '0');
+    }
+
+    args.push(
+        '-i', inputUrl,
         // Map only first video and audio stream (avoid subtitle streams causing issues)
         '-map', '0:v:0',
         '-map', '0:a:0?', // ? makes audio optional if not present
@@ -208,7 +226,7 @@ router.get('/', async (req, res) => {
         '-ar', '48000',
         '-b:a', '192k',
         // Handle async audio/video using async filter
-        '-af', 'aresample=async=1:min_hard_comp=0.100000:first_pts=0',
+        '-af', audioFilters.join(','),
         // Timestamp handling
         '-fps_mode', 'passthrough',
         '-async', '1',
@@ -218,7 +236,7 @@ router.get('/', async (req, res) => {
         '-movflags', 'frag_keyframe+empty_moov+default_base_moof+faststart',
         '-flush_packets', '1', // Send data immediately
         '-' // Output to stdout
-    ];
+    );
 
     console.log(`[Transcode] Full command: ${ffmpegPath} ${args.join(' ')}`);
 
@@ -235,6 +253,8 @@ router.get('/', async (req, res) => {
 
     // Set headers for fragmented MP4
     res.setHeader('Content-Type', 'video/mp4');
+    res.setHeader('Accept-Ranges', 'none');
+    res.setHeader('Cache-Control', 'no-store');
     res.setHeader('Access-Control-Allow-Origin', '*');
 
     // Pipe stdout to response

@@ -62,6 +62,8 @@ function getDefaultSettings() {
     rememberVolume: true,
     lastVolume: 80,
     autoPlayNextEpisode: false,
+    audioDelayMs: 0,
+    playbackRate: 1,
     forceProxy: false,
     forceTranscode: false, // Force Audio Transcode
     forceVideoTranscode: false, // Force Video Transcode

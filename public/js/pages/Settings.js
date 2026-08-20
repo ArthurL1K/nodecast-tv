@@ -77,6 +77,28 @@ class SettingsPage {
             this.app.player.saveSettings();
         });
 
+        const audioDelaySlider = document.getElementById('setting-audio-delay');
+        const audioDelayValue = document.getElementById('audio-delay-value');
+        if (audioDelaySlider && this.app.player?.settings) {
+            const delay = this.app.player.settings.audioDelayMs || 0;
+            audioDelaySlider.value = delay;
+            if (audioDelayValue) audioDelayValue.textContent = `${delay} ms`;
+
+            audioDelaySlider.addEventListener('input', () => {
+                const ms = parseInt(audioDelaySlider.value, 10) || 0;
+                if (audioDelayValue) audioDelayValue.textContent = `${ms} ms`;
+                this.app.player.setAudioDelayMs(ms);
+            });
+        }
+
+        const playbackRateSelect = document.getElementById('setting-playback-rate');
+        if (playbackRateSelect && this.app.player?.settings) {
+            playbackRateSelect.value = String(this.app.player.settings.playbackRate || 1);
+            playbackRateSelect.addEventListener('change', () => {
+                this.app.player.setPlaybackRate(parseFloat(playbackRateSelect.value));
+            });
+        }
+
         // EPG refresh interval
         const epgRefreshSelect = document.getElementById('epg-refresh-interval');
         if (epgRefreshSelect && this.app.player?.settings) {
@@ -570,6 +592,12 @@ class SettingsPage {
             if (volumeValueDisplay) volumeValueDisplay.textContent = s.defaultVolume + '%';
             if (rememberVolumeToggle) rememberVolumeToggle.checked = s.rememberVolume;
             if (autoPlayNextToggle) autoPlayNextToggle.checked = s.autoPlayNextEpisode;
+            const audioDelaySlider = document.getElementById('setting-audio-delay');
+            const audioDelayValue = document.getElementById('audio-delay-value');
+            if (audioDelaySlider) audioDelaySlider.value = s.audioDelayMs || 0;
+            if (audioDelayValue) audioDelayValue.textContent = `${s.audioDelayMs || 0} ms`;
+            const playbackRateSelect = document.getElementById('setting-playback-rate');
+            if (playbackRateSelect) playbackRateSelect.value = String(s.playbackRate || 1);
             if (forceProxyToggle) forceProxyToggle.checked = s.forceProxy || false;
             if (forceTranscodeToggle) forceTranscodeToggle.checked = s.forceTranscode || false;
             if (forceRemuxToggle) forceRemuxToggle.checked = s.forceRemux || false;

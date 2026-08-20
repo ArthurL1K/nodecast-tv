@@ -54,6 +54,9 @@ class HomePage {
                 <section class="dashboard-section" id="continue-watching-section">
                     <div class="section-header">
                         <h2>Continue Watching</h2>
+                        <button class="btn btn-sm btn-ghost" id="clear-history-btn" title="Clear watch history">
+                            Clear
+                        </button>
                     </div>
                     <div class="scroll-wrapper">
                         <button class="scroll-arrow scroll-left" aria-label="Scroll left">
@@ -116,6 +119,7 @@ class HomePage {
 
         // Attach scroll arrow handlers
         this.initScrollArrows();
+        this.initClearHistoryButton();
     }
 
     initScrollArrows() {
@@ -149,6 +153,25 @@ class HomePage {
             scrollContainer.addEventListener('scroll', updateArrows);
             // Initial check after content loads
             setTimeout(updateArrows, 100);
+        });
+    }
+
+    initClearHistoryButton() {
+        const btn = document.getElementById('clear-history-btn');
+        if (!btn) return;
+
+        btn.addEventListener('click', async () => {
+            if (!confirm('Clear all Continue Watching history?')) return;
+
+            btn.disabled = true;
+            try {
+                await window.API.request('DELETE', '/history');
+                const section = document.getElementById('continue-watching-section');
+                if (section) section.classList.add('hidden');
+            } catch (err) {
+                console.error('[Dashboard] Failed to clear history:', err);
+                btn.disabled = false;
+            }
         });
     }
 

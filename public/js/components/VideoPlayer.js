@@ -31,6 +31,7 @@ class VideoPlayer {
 
         // Settings - start with defaults, load from server async
         this.settings = this.getDefaultSettings();
+        this.audioSync = new AudioSync();
 
         // Load settings from server, then init
         this.loadSettingsFromServer().then(() => {
@@ -49,6 +50,8 @@ class VideoPlayer {
             rememberVolume: true,
             lastVolume: 80,
             autoPlayNextEpisode: false,
+            audioDelayMs: 0,
+            playbackRate: 1,
             forceProxy: false,
             forceTranscode: false,
             forceRemux: false,
@@ -299,6 +302,9 @@ class VideoPlayer {
         });
 
         this.video.addEventListener('volumechange', updateVolumeUI);
+
+        this.initAudioSyncControls();
+        this.initPlaybackSpeedControls();
 
         // Captions
         this.captionsBtn = document.getElementById('player-captions-btn');
@@ -597,10 +603,196 @@ class VideoPlayer {
         this.closeCaptionsMenu();
     }
 
+    initAudioSyncControls() {
+        this.audioSyncBtn = document.getElementById('player-audiosync-btn');
+        this.audioSyncMenu = document.getElementById('player-audiosync-menu');
+        this.audioSyncSlider = document.getElementById('player-audiosync-slider');
+        this.audioSyncValue = document.getElementById('player-audiosync-value');
+        this.audioSyncMenuOpen = false;
+
+        this.audioSyncBtn?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.audioSyncMenuOpen = !this.audioSyncMenuOpen;
+            this.audioSyncMenu?.classList.toggle('hidden', !this.audioSyncMenuOpen);
+        });
+
+        this.audioSyncMenu?.addEventListener('click', (e) => e.stopPropagation());
+
+        this.audioSyncSlider?.addEventListener('input', (e) => {
+            e.stopPropagation();
+            this.setAudioDelayMs(parseInt(e.target.value, 10));
+        });
+
+        document.getElementById('player-audiosync-minus')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.setAudioDelayMs((this.settings.audioDelayMs || 0) - 50);
+        });
+
+        document.getElementById('player-audiosync-plus')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.setAudioDelayMs((this.settings.audioDelayMs || 0) + 50);
+        });
+
+        document.getElementById('player-audiosync-reset')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.setAudioDelayMs(0);
+        });
+
+        document.addEventListener('click', (e) => {
+            if (this.audioSyncMenuOpen &&
+                !this.audioSyncMenu.contains(e.target) &&
+                !this.audioSyncBtn.contains(e.target)) {
+                this.audioSyncMenuOpen = false;
+                this.audioSyncMenu?.classList.add('hidden');
+            }
+        });
+    }
+
+    async setAudioDelayMs(ms, { persist = true, applyGraph = true } = {}) {
+        const applied = this.audioSync.clamp(ms);
+        this.audioSync.delayMs = applied;
+        this.settings.audioDelayMs = applied;
+        this.updateAudioSyncUI();
+        if (persist) {
+            this.saveSettings();
+            await AudioSync.broadcast(applied, this);
+        }
+        if (applyGraph) {
+            this.restartPlaybackForAudioDelay();
+        }
+        return applied;
+    }
+
+    restartPlaybackForAudioDelay() {
+        clearTimeout(this._audioDelayRestart);
+        this._audioDelayRestart = setTimeout(() => {
+            if (this.currentChannel && this.originalStreamUrl) {
+                this.play(this.currentChannel, this.originalStreamUrl);
+            }
+        }, 500);
+    }
+
+    updateAudioSyncUI() {
+        const ms = this.settings.audioDelayMs || 0;
+        if (this.audioSyncSlider) this.audioSyncSlider.value = String(ms);
+        if (this.audioSyncValue) this.audioSyncValue.textContent = `${ms} ms`;
+        if (this.audioSyncBtn) {
+            this.audioSyncBtn.title = ms ? `Audio sync (${ms} ms)` : 'Audio sync';
+            this.audioSyncBtn.classList.toggle('active', ms > 0);
+        }
+    }
+
+    getPlaybackRates() {
+        return [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+    }
+
+    formatPlaybackRate(rate) {
+        return `${Number(rate)}×`;
+    }
+
+    initPlaybackSpeedControls() {
+        this.speedBtn = document.getElementById('player-speed-btn');
+        this.speedMenu = document.getElementById('player-speed-menu');
+        this.speedList = document.getElementById('player-speed-list');
+        this.speedMenuOpen = false;
+
+        this.renderPlaybackSpeedMenu();
+
+        this.speedBtn?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.speedMenuOpen = !this.speedMenuOpen;
+            this.speedMenu?.classList.toggle('hidden', !this.speedMenuOpen);
+        });
+
+        this.speedMenu?.addEventListener('click', (e) => e.stopPropagation());
+
+        document.addEventListener('click', (e) => {
+            if (this.speedMenuOpen &&
+                !this.speedMenu.contains(e.target) &&
+                !this.speedBtn.contains(e.target)) {
+                this.closePlaybackSpeedMenu();
+            }
+        });
+
+        this.applyPlaybackRate();
+    }
+
+    renderPlaybackSpeedMenu() {
+        if (!this.speedList) return;
+        const current = this.getPlaybackRate();
+        this.speedList.innerHTML = '';
+        this.getPlaybackRates().forEach((rate) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'captions-option';
+            btn.dataset.rate = String(rate);
+            btn.textContent = rate === 1 ? 'Normal (1×)' : this.formatPlaybackRate(rate);
+            if (rate === current) btn.classList.add('active');
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.setPlaybackRate(rate);
+                this.closePlaybackSpeedMenu();
+            });
+            this.speedList.appendChild(btn);
+        });
+    }
+
+    closePlaybackSpeedMenu() {
+        this.speedMenuOpen = false;
+        this.speedMenu?.classList.add('hidden');
+    }
+
+    getPlaybackRate() {
+        const rate = Number(this.settings.playbackRate);
+        return this.getPlaybackRates().includes(rate) ? rate : 1;
+    }
+
+    applyPlaybackRate() {
+        const rate = this.getPlaybackRate();
+        if (this.video) this.video.playbackRate = rate;
+        this.updatePlaybackSpeedUI();
+    }
+
+    setPlaybackRate(rate, { persist = true } = {}) {
+        const allowed = this.getPlaybackRates();
+        const applied = allowed.includes(Number(rate)) ? Number(rate) : 1;
+        this.settings.playbackRate = applied;
+        if (this.video) this.video.playbackRate = applied;
+        this.updatePlaybackSpeedUI();
+        window.app?.pages?.watch?.applyPlaybackRateFromSettings?.(applied);
+        if (persist) this.saveSettings();
+        return applied;
+    }
+
+    nudgePlaybackRate(direction) {
+        const rates = this.getPlaybackRates();
+        const current = this.getPlaybackRate();
+        const idx = rates.indexOf(current);
+        const next = rates[Math.max(0, Math.min(rates.length - 1, idx + direction))];
+        this.setPlaybackRate(next);
+        return next;
+    }
+
+    updatePlaybackSpeedUI() {
+        const rate = this.getPlaybackRate();
+        const label = this.speedBtn?.querySelector('.speed-btn-label');
+        if (label) label.textContent = this.formatPlaybackRate(rate);
+        if (this.speedBtn) {
+            this.speedBtn.title = `Playback speed (${this.formatPlaybackRate(rate)})`;
+            this.speedBtn.classList.toggle('active', rate !== 1);
+        }
+        this.speedList?.querySelectorAll('.captions-option').forEach((btn) => {
+            btn.classList.toggle('active', Number(btn.dataset.rate) === rate);
+        });
+        const select = document.getElementById('setting-playback-rate');
+        if (select) select.value = String(rate);
+    }
+
     init() {
         // Apply default/remembered volume
         const volume = this.settings.rememberVolume ? this.settings.lastVolume : this.settings.defaultVolume;
         this.video.volume = volume / 100;
+        this.applyPlaybackRate();
 
         // Save volume changes
         this.video.addEventListener('volumechange', () => {
@@ -612,9 +804,13 @@ class VideoPlayer {
 
         // Setup custom video controls
         this.initCustomControls();
+        this.setAudioDelayMs(this.settings.audioDelayMs || 0, { persist: false, applyGraph: false }).then((ms) => {
+            window.app?.pages?.watch?.setAudioDelayMs(ms, { persist: false, applyGraph: false });
+        });
 
         // Detect video resolution when metadata loads (works for all streams)
         this.video.addEventListener('loadedmetadata', () => {
+            this.applyPlaybackRate();
             if (this.video.videoHeight > 0) {
                 this.currentStreamInfo = {
                     width: this.video.videoWidth,
@@ -818,7 +1014,13 @@ class VideoPlayer {
             const res = await fetch('/api/transcode/session', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url, ...options })
+                body: JSON.stringify({
+                    url,
+                    audioCodec: options.audioCodec,
+                    audioChannels: options.audioChannels,
+                    ...options,
+                    audioDelayMs: this.settings.audioDelayMs || 0
+                })
             });
             if (!res.ok) throw new Error('Failed to start session');
             const session = await res.json();
@@ -827,7 +1029,7 @@ class VideoPlayer {
         } catch (err) {
             console.error('[Player] Session start failed:', err);
             // Fallback to direct transcode if session fails
-            return `/api/transcode?url=${encodeURIComponent(url)}`;
+            return `/api/transcode?url=${encodeURIComponent(url)}&audioDelayMs=${this.settings.audioDelayMs || 0}`;
         }
     }
 
@@ -852,6 +1054,7 @@ class VideoPlayer {
      */
     async play(channel, streamUrl) {
         this.currentChannel = channel;
+        this.originalStreamUrl = streamUrl;
 
         try {
             // Stop any WatchPage playback (movies/series) before starting Live TV
@@ -924,7 +1127,7 @@ class VideoPlayer {
                         });
                         this.currentUrl = playlistUrl; // Update currentUrl for HLS reload
 
-                        this.playHls(playlistUrl);
+                        this.playTranscoded(playlistUrl);
 
                         this.updateNowPlaying(channel);
                         this.showNowPlayingOverlay();
@@ -1016,7 +1219,7 @@ class VideoPlayer {
                 this.currentUrl = playlistUrl;
 
                 console.log('[Player] Playing transcoded HLS stream:', playlistUrl);
-                this.playHls(playlistUrl);
+                this.playTranscoded(playlistUrl);
 
                 // Update UI and dispatch events
                 this.updateNowPlaying(channel);
@@ -1024,6 +1227,19 @@ class VideoPlayer {
                 this.fetchEpgData(channel);
                 window.dispatchEvent(new CustomEvent('channelChanged', { detail: channel }));
                 return; // Exit early
+            }
+
+            // Audio delay is applied by FFmpeg. Direct/HLS play cannot delay audio
+            // without Web Audio, which mutes cross-origin IPTV streams.
+            if ((this.settings.audioDelayMs || 0) > 0) {
+                console.log(`[Player] Audio delay ${this.settings.audioDelayMs}ms — using FFmpeg pipe`);
+                this.updateTranscodeStatus('transcoding', `Audio delay ${this.settings.audioDelayMs}ms`);
+                this.playAudioDelayTranscode(streamUrl);
+                this.updateNowPlaying(channel);
+                this.showNowPlayingOverlay();
+                this.fetchEpgData(channel);
+                window.dispatchEvent(new CustomEvent('channelChanged', { detail: channel }));
+                return;
             }
 
             // Proactively use proxy for:
@@ -1187,6 +1403,34 @@ class VideoPlayer {
     }
 
     /**
+     * Play a transcode result: HLS playlist via hls.js, otherwise native video.src
+     */
+    playTranscoded(url) {
+        if (typeof url === 'string' && url.includes('.m3u8')) {
+            this.playHls(url);
+            return;
+        }
+        this.playDirect(url);
+    }
+
+    playDirect(src) {
+        if (this.hls) {
+            this.hls.destroy();
+            this.hls = null;
+        }
+        this.currentUrl = src;
+        this.video.src = src;
+        this.video.play().catch(e => {
+            if (e.name !== 'AbortError') console.log('[Player] Autoplay prevented:', e);
+        });
+    }
+
+    playAudioDelayTranscode(streamUrl) {
+        const delayMs = this.settings.audioDelayMs || 0;
+        this.playDirect(`/api/transcode?url=${encodeURIComponent(streamUrl)}&audioDelayMs=${delayMs}`);
+    }
+
+    /**
      * Helper to play HLS stream (reduces duplication)
      */
     playHls(url) {
@@ -1199,6 +1443,7 @@ class VideoPlayer {
         this.hls.attachMedia(this.video);
 
         this.hls.on(Hls.Events.MANIFEST_PARSED, () => {
+            this.applyPlaybackRate();
             this.video.play().catch(e => {
                 if (e.name !== 'AbortError') console.log('Autoplay prevented:', e);
             });
@@ -1472,6 +1717,24 @@ class VideoPlayer {
                 e.preventDefault();
                 this.video.muted = !this.video.muted;
                 break;
+            case '[':
+            case ']': {
+                const liveActive = document.getElementById('page-live')?.classList.contains('active');
+                if (!liveActive) break;
+                e.preventDefault();
+                this.setAudioDelayMs((this.settings.audioDelayMs || 0) + (e.key === ']' ? 50 : -50));
+                break;
+            }
+            case '<':
+            case ',':
+            case '>':
+            case '.': {
+                const liveActive = document.getElementById('page-live')?.classList.contains('active');
+                if (!liveActive) break;
+                e.preventDefault();
+                this.nudgePlaybackRate(e.key === '>' || e.key === '.' ? 1 : -1);
+                break;
+            }
             case 'ArrowUp':
                 if (!this.settings.arrowKeysChangeChannel) {
                     e.preventDefault();

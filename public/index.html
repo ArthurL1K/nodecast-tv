@@ -216,7 +216,35 @@
                     </button>
                     <input type="range" class="watch-volume" id="player-volume" min="0" max="100" value="80">
 
+                    <div class="watch-captions-wrapper">
+                      <button class="watch-btn" id="player-audiosync-btn" title="Audio sync">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="icon">
+                          <path d="M11 15H9.5V8.5H11V15zm3.5 0H13V3.5h1.5V15zM8 15H6.5v-4.5H8V15zm10 0h-1.5V6H18v9zM4 18h16v2H4z"/>
+                        </svg>
+                      </button>
+                      <div class="watch-captions-menu audio-sync-menu hidden" id="player-audiosync-menu">
+                        <div class="captions-menu-title">Audio sync</div>
+                        <div class="audio-sync-panel">
+                          <button type="button" class="watch-btn audio-sync-nudge" id="player-audiosync-minus" title="Delay -50 ms">−</button>
+                          <input type="range" id="player-audiosync-slider" min="0" max="2000" step="10" value="0">
+                          <button type="button" class="watch-btn audio-sync-nudge" id="player-audiosync-plus" title="Delay +50 ms">+</button>
+                        </div>
+                        <div class="audio-sync-value" id="player-audiosync-value">0 ms</div>
+                        <button type="button" class="captions-option" id="player-audiosync-reset">Reset</button>
+                      </div>
+                    </div>
+
                     <!-- Captions Button -->
+                    <div class="watch-captions-wrapper">
+                      <button class="watch-btn watch-speed-btn" id="player-speed-btn" title="Playback speed">
+                        <span class="speed-btn-label">1×</span>
+                      </button>
+                      <div class="watch-captions-menu hidden" id="player-speed-menu">
+                        <div class="captions-menu-title">Speed</div>
+                        <div class="captions-menu-list" id="player-speed-list"></div>
+                      </div>
+                    </div>
+
                     <div class="watch-captions-wrapper">
                       <button class="watch-btn" id="player-captions-btn" title="Captions">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="icon">
@@ -510,6 +538,31 @@
                   <span class="setting-hint">Automatically play the next episode when one ends</span>
                 </div>
               </div>
+              <div class="setting-item">
+                <div class="setting-info">
+                  <label class="setting-label" for="setting-audio-delay">Audio Sync Delay</label>
+                  <span class="setting-hint">Increase if audio plays before the picture. Changing this restarts the current stream. Keyboard: [ and ]</span>
+                </div>
+                <div class="volume-slider-container">
+                  <input type="range" id="setting-audio-delay" class="volume-slider" min="0" max="2000" step="10" value="0">
+                  <span id="audio-delay-value">0 ms</span>
+                </div>
+              </div>
+              <div class="setting-item">
+                <div class="setting-info">
+                  <label class="setting-label" for="setting-playback-rate">Playback Speed</label>
+                  <span class="setting-hint">Default speed for movies, series, and live TV. Keyboard: &lt; and &gt;</span>
+                </div>
+                <select id="setting-playback-rate" class="source-select" style="width: auto; min-width: 120px;">
+                  <option value="0.5">0.5×</option>
+                  <option value="0.75">0.75×</option>
+                  <option value="1" selected>1× (Normal)</option>
+                  <option value="1.25">1.25×</option>
+                  <option value="1.5">1.5×</option>
+                  <option value="1.75">1.75×</option>
+                  <option value="2">2×</option>
+                </select>
+              </div>
             </div>
 
             <div class="settings-section">
@@ -520,6 +573,8 @@
                 <div class="shortcut"><kbd>Space</kbd> / <kbd>K</kbd> Play/Pause</div>
                 <div class="shortcut"><kbd>F</kbd> Fullscreen</div>
                 <div class="shortcut"><kbd>M</kbd> Mute/Unmute</div>
+                <div class="shortcut"><kbd>[</kbd> / <kbd>]</kbd> Audio delay −/+ 50 ms</div>
+                <div class="shortcut"><kbd>&lt;</kbd> / <kbd>&gt;</kbd> Playback speed down/up</div>
                 <div class="shortcut"><kbd>I</kbd> Toggle info overlay</div>
                 <div class="shortcut"><kbd>PgUp</kbd> / <kbd>PgDn</kbd> Channel up/down</div>
               </div>
@@ -892,6 +947,32 @@
                   </svg>
                 </button>
                 <input type="range" class="watch-volume" id="watch-volume" min="0" max="100" value="80">
+                <div class="watch-captions-wrapper">
+                  <button class="watch-btn" id="watch-audiosync-btn" title="Audio sync">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="icon">
+                      <path d="M11 15H9.5V8.5H11V15zm3.5 0H13V3.5h1.5V15zM8 15H6.5v-4.5H8V15zm10 0h-1.5V6H18v9zM4 18h16v2H4z"/>
+                    </svg>
+                  </button>
+                  <div class="watch-captions-menu audio-sync-menu hidden" id="watch-audiosync-menu">
+                    <div class="captions-menu-title">Audio sync</div>
+                    <div class="audio-sync-panel">
+                      <button type="button" class="watch-btn audio-sync-nudge" id="watch-audiosync-minus" title="Delay -50 ms">−</button>
+                      <input type="range" id="watch-audiosync-slider" min="0" max="2000" step="10" value="0">
+                      <button type="button" class="watch-btn audio-sync-nudge" id="watch-audiosync-plus" title="Delay +50 ms">+</button>
+                    </div>
+                    <div class="audio-sync-value" id="watch-audiosync-value">0 ms</div>
+                    <button type="button" class="captions-option" id="watch-audiosync-reset">Reset</button>
+                  </div>
+                </div>
+                <div class="watch-captions-wrapper">
+                  <button class="watch-btn watch-speed-btn" id="watch-speed-btn" title="Playback speed">
+                    <span class="speed-btn-label">1×</span>
+                  </button>
+                  <div class="watch-captions-menu hidden" id="watch-speed-menu">
+                    <div class="captions-menu-title">Speed</div>
+                    <div class="captions-menu-list" id="watch-speed-list"></div>
+                  </div>
+                </div>
                 <!-- Captions Button -->
                 <div class="watch-captions-wrapper">
                   <button class="watch-btn" id="watch-captions-btn" title="Captions">
@@ -1096,8 +1177,9 @@
 
   <!-- JavaScript -->
   <script src="/js/icons.js"></script>
+  <script src="/js/audioSync.js?v=3"></script>
   <script src="/js/api.js?v=2"></script>
-  <script src="/js/components/VideoPlayer.js?v=2"></script>
+  <script src="/js/components/VideoPlayer.js?v=6"></script>
   <script src="/js/components/ChannelList.js?v=3"></script>
   <script src="/js/components/SourceManager.js?v=2"></script>
   <script src="/js/components/EpgGuide.js?v=2"></script>
@@ -1106,8 +1188,8 @@
   <script src="/js/pages/Guide.js?v=2"></script>
   <script src="/js/pages/MoviesPage.js?v=4"></script>
   <script src="/js/pages/SeriesPage.js?v=1"></script>
-  <script src="/js/pages/Settings.js?v=2"></script>
-  <script src="/js/pages/WatchPage.js?v=1"></script>
+  <script src="/js/pages/Settings.js?v=3"></script>
+  <script src="/js/pages/WatchPage.js?v=5"></script>
   <script src="/js/app.js?v=4"></script>
   <script>
     // Check for SSO token in URL

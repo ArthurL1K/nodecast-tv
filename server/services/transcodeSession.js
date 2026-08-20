@@ -31,6 +31,22 @@ const SEGMENT_DURATION = 4; // seconds per HLS segment
 const CLEANUP_INTERVAL_MS = 5 * 60 * 1000; // Check every 5 minutes
 
 /**
+ * Resolve FFmpeg input URLs. Relative /api paths become localhost.
+ * Remote IPTV URLs are left as-is so FFmpeg can connect directly
+ * (piping through the Node proxy makes FFmpeg abort the fetch during probe).
+ */
+function toFfmpegInputUrl(url) {
+    if (!url || typeof url !== 'string') return url;
+
+    if (url.startsWith('/')) {
+        const port = process.env.PORT || 3000;
+        return `http://127.0.0.1:${port}${url}`;
+    }
+
+    return url;
+}
+
+/**
  * Generate a unique session ID
  */
 function generateSessionId() {
@@ -203,12 +219,13 @@ class TranscodeSession extends EventEmitter {
             '-reconnect_delay_max', '3'
         );
 
-        args.push('-i', this.url);
-
-        // Add seek offset if specified (as output option to avoid Range requests)
+        // Input seek so the first HLS segment appears quickly on HTTP VOD.
+        // Output -ss (after -i) would decode until the offset and miss the playlist timeout.
         if (this.options.seekOffset > 0) {
             args.push('-ss', String(this.options.seekOffset));
         }
+
+        args.push('-i', toFfmpegInputUrl(this.url));
 
         // Map streams
         args.push('-map', '0:v:0');
@@ -231,11 +248,13 @@ class TranscodeSession extends EventEmitter {
             this.addVideoEncoderArgs(args, encoder);
         }
 
-        // Audio: Apply mix preset
+        // Audio: Apply mix preset (and optional lip-sync delay)
         const audioCodec = this.options.audioCodec?.toLowerCase() || 'unknown';
         const audioChannels = this.options.audioChannels || 0;
         const audioMixPreset = this.options.audioMixPreset || 'auto';
-        const isStereoAac = audioCodec.includes('aac') && audioChannels === 2;
+        const isStereoAac = audioCodec.includes('aac') && audioChannels <= 2;
+        const audioDelayMs = Math.max(0, parseInt(this.options.audioDelayMs, 10) || 0);
+        const delayFilter = audioDelayMs > 0 ? `adelay=${audioDelayMs}:all=1` : null;
 
         // Define pan filter presets for 5.1 -> Stereo downmix
         const AUDIO_MIX_FILTERS = {
@@ -247,25 +266,37 @@ class TranscodeSession extends EventEmitter {
             cinematic: 'pan=stereo|FL=FC+0.80*FL+0.60*BL+0.5*LFE|FR=FC+0.80*FR+0.60*BR+0.5*LFE'
         };
 
-        if (audioMixPreset === 'passthrough') {
-            // Passthrough: Always copy audio, no processing
-            console.log(`[TranscodeSession ${this.id}] Audio: Passthrough (copy)`);
-            args.push('-c:a', 'copy');
-        } else if (audioMixPreset === 'auto' && isStereoAac) {
-            // Auto + Stereo AAC source: Smart copy
-            console.log(`[TranscodeSession ${this.id}] Audio: Auto (Smart Copy) - Source is Stereo AAC`);
+        const isSurround = audioChannels > 2 || /^(ac3|eac3|dts|truehd)/.test(audioCodec);
+        const explicitMix = audioMixPreset !== 'auto' && audioMixPreset !== 'passthrough';
+        const needsDownmix = explicitMix || isSurround;
+        const canCopyAudio = !delayFilter && (audioMixPreset === 'passthrough' || (audioMixPreset === 'auto' && isStereoAac));
+
+        if (canCopyAudio) {
+            if (audioMixPreset === 'passthrough') {
+                console.log(`[TranscodeSession ${this.id}] Audio: Passthrough (copy)`);
+            } else {
+                console.log(`[TranscodeSession ${this.id}] Audio: Auto (Smart Copy) - Source is Stereo AAC`);
+            }
             args.push('-c:a', 'copy');
         } else {
-            // Transcode to AAC with selected mix preset (default to ITU for 'auto')
-            const mixPreset = (audioMixPreset === 'auto') ? 'itu' : audioMixPreset;
-            const panFilter = AUDIO_MIX_FILTERS[mixPreset] || AUDIO_MIX_FILTERS.itu;
-
-            console.log(`[TranscodeSession ${this.id}] Audio: ${mixPreset.toUpperCase()} mix (${audioCodec} ${audioChannels}ch -> Stereo AAC)`);
+            const mixPreset = explicitMix ? audioMixPreset : 'itu';
+            const filters = [];
+            if (needsDownmix) {
+                filters.push(AUDIO_MIX_FILTERS[mixPreset] || AUDIO_MIX_FILTERS.itu);
+                console.log(`[TranscodeSession ${this.id}] Audio: ${mixPreset.toUpperCase()} mix (${audioCodec} ${audioChannels}ch -> Stereo AAC)`);
+            } else {
+                console.log(`[TranscodeSession ${this.id}] Audio: AAC encode (${audioCodec} ${audioChannels || '?'}ch${delayFilter ? `, delay ${audioDelayMs}ms` : ''})`);
+            }
+            filters.push('aresample=async=1');
+            if (delayFilter) {
+                filters.push(delayFilter);
+                console.log(`[TranscodeSession ${this.id}] Audio delay: ${audioDelayMs} ms`);
+            }
             args.push(
                 '-c:a', 'aac',
                 '-ar', '48000',
                 '-b:a', '192k',
-                '-af', `${panFilter},aresample=async=1`
+                '-af', filters.join(',')
             );
         }
 
@@ -767,6 +798,7 @@ module.exports = {
     recoverSessions,
     startCleanupInterval,
     getAllSessions,
+    toFfmpegInputUrl,
     CACHE_DIR,
     SEGMENT_DURATION
 };

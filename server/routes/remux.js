@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { spawn } = require('child_process');
 const db = require('../db');
+const { toFfmpegInputUrl } = require('../services/transcodeSession');
 
 /**
  * Remux stream (container conversion only)
@@ -50,7 +51,7 @@ router.get('/', async (req, res) => {
         '-reconnect_delay_max', '5',
         // Prevent Range/HEAD requests that some providers reject with 405
         '-seekable', '0',
-        '-i', url,
+        '-i', toFfmpegInputUrl(url),
         // STRICT MAPPING: Only map video and audio, ignore subtitles/data/attachments
         // This prevents remux failure when source container has incompatible subtitle tracks (e.g. MKV -> MP4)
         '-map', '0:v',

@@ -3628,6 +3628,23 @@ kbd {
   background: rgba(255, 255, 255, 0.1);
 }
 
+.watch-btn.active {
+  color: var(--color-accent);
+}
+
+.watch-speed-btn {
+  width: auto;
+  min-width: 44px;
+  padding: 0 8px;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.speed-btn-label {
+  line-height: 1;
+}
+
 .watch-btn .icon {
   width: 24px;
   height: 24px;
@@ -3693,6 +3710,53 @@ kbd {
 
 .captions-option.active::before {
   content: "✓ ";
+}
+
+.audio-sync-menu {
+  min-width: 240px;
+  padding-bottom: var(--space-sm);
+}
+
+.audio-sync-panel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+}
+
+.audio-sync-panel input[type="range"] {
+  flex: 1;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.audio-sync-panel input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  background: #fff;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.audio-sync-nudge {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  font-size: 1.125rem;
+  line-height: 1;
+}
+
+.audio-sync-value {
+  text-align: center;
+  font-size: 0.8125rem;
+  color: var(--color-text-primary);
+  padding: 0 var(--space-md) var(--space-xs);
 }
 
 .watch-btn-lg {

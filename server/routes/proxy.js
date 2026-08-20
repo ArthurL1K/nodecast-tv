@@ -761,6 +761,11 @@ router.get('/stream', async (req, res) => {
 
         } catch (err) {
             lastError = err;
+            const aborted = err.name === 'AbortError' || err.message === 'terminated' || err.code === 'UND_ERR_ABORTED';
+            if (aborted) {
+                console.warn(`[Proxy] Upstream fetch aborted (client/FFmpeg closed the connection)`);
+                break;
+            }
             console.error(`Stream proxy error (attempt ${attempt}/${maxRetries}):`, err.message);
             if (attempt < maxRetries) {
                 console.log('[Proxy] Retrying after error...');
